@@ -6,6 +6,7 @@ import iconSun from './assets/icon-sun.svg'
 import CourseForm from './components/CourseForm'
 import type { CourseFormDraft } from './components/CourseForm'
 import ScheduleView from './components/ScheduleView'
+import type { CourseMoveDraft } from './components/ScheduleView'
 import { Schedule, Course, CourseColor, TimeRange } from './domain'
 import type { Day } from './domain'
 import { usePersistedCourses } from './hooks/usePersistedCourses'
@@ -293,6 +294,34 @@ function App() {
     }
   }
 
+  function handleMoveCourse(draft: CourseMoveDraft) {
+    clearShareId()
+    setEditingDraft(null)
+    setCourses((prev) => {
+      const movingIds = new Set(draft.ids)
+      const remaining = prev.flatMap((course) => {
+        if (!movingIds.has(course.id)) return [course]
+        const days = course.days.filter((day) => day !== draft.fromDay)
+        if (days.length === 0) return []
+        return [course.with({ days })]
+      })
+      const moved = new Course(
+        draft.name,
+        [draft.toDay],
+        new TimeRange(draft.startTime, draft.endTime),
+        new CourseColor(draft.color),
+      )
+      const nextSchedule = new Schedule()
+      for (const course of remaining) {
+        const check = nextSchedule.tryAddCourse(course)
+        if (check.hasConflict) return prev
+      }
+      const moveCheck = nextSchedule.tryAddCourse(moved)
+      if (moveCheck.hasConflict) return prev
+      return [...remaining, moved]
+    })
+  }
+
   return (
     <div className={`app-layout${darkMode ? ' dark' : ''}`}>
       <aside className={`app-sidebar${sidebarOpen ? ' app-sidebar--open' : ''}${sidebarCollapsed ? ' app-sidebar--collapsed' : ''}`}>
@@ -352,6 +381,7 @@ function App() {
           onClear={handleClear}
           onRemoveCourseFromDay={handleRemoveCourseFromDay}
           onEditCourse={handleEditCourse}
+          onMoveCourse={handleMoveCourse}
           onShare={handleShare}
           shareState={shareState}
           onShareClose={handleShareClose}

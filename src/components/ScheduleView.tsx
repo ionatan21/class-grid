@@ -26,6 +26,10 @@ const SLOT_ROW_OFFSET = 2;
 const TIME_COL = 1;
 const DAY_COL_OFFSET = 2;
 const MIN_TEXT_CONTRAST = 4.5;
+const TOUCH_LONG_PRESS_MS = 420;
+const TOUCH_MOVE_CANCEL_PX = 14;
+const TOUCH_DOUBLE_TAP_MS = 360;
+const TOUCH_DOUBLE_TAP_PX = 28;
 
 interface RgbColor {
   r: number;
@@ -145,6 +149,7 @@ interface PendingRemoval {
   courses: Course[];
   name: string;
   day: Day;
+  block?: DisplayCourseBlock;
 }
 
 interface DisplayCourseBlock {
@@ -153,6 +158,52 @@ interface DisplayCourseBlock {
   courses: Course[];
   start: string;
   end: string;
+  color: string;
+}
+
+interface DragCandidate {
+  day: Day;
+  dayIndex: number;
+  start: string;
+  end: string;
+  rowStart: number;
+  rowSpan: number;
+  valid: boolean;
+}
+
+interface DragState {
+  block: DisplayCourseBlock;
+  fromDay: Day;
+  pointerId: number;
+  rowSpan: number;
+  candidate: DragCandidate;
+}
+
+interface TouchPressState {
+  block: DisplayCourseBlock;
+  day: Day;
+  rowSpan: number;
+  pointerId: number;
+  startX: number;
+  startY: number;
+  target: HTMLDivElement;
+}
+
+interface LastTapState {
+  blockKey: string;
+  day: Day;
+  time: number;
+  x: number;
+  y: number;
+}
+
+export interface CourseMoveDraft {
+  ids: string[];
+  fromDay: Day;
+  toDay: Day;
+  name: string;
+  startTime: string;
+  endTime: string;
   color: string;
 }
 
@@ -203,6 +254,33 @@ function buildDisplayCourseBlocks(courses: readonly Course[]): DisplayCourseBloc
   return blocks;
 }
 
+function formatSlotStart(slotIndex: number): string {
+  return `${String(FIRST_HOUR + slotIndex).padStart(2, "0")}:00`;
+}
+
+function formatSlotEnd(slotIndex: number): string {
+  return `${String(FIRST_HOUR + slotIndex).padStart(2, "0")}:50`;
+}
+
+function slotIndexFromStart(start: string): number {
+  return parseInt(start.split(":")[0], 10) - FIRST_HOUR;
+}
+
+function slotIndexFromEnd(end: string): number {
+  return parseInt(end.split(":")[0], 10) - FIRST_HOUR;
+}
+
+function rangesOverlap(
+  startSlot: number,
+  rowSpan: number,
+  block: DisplayCourseBlock,
+): boolean {
+  const endExclusive = startSlot + rowSpan;
+  const blockStart = slotIndexFromStart(block.start);
+  const blockEndExclusive = slotIndexFromEnd(block.end) + 1;
+  return startSlot < blockEndExclusive && endExclusive > blockStart;
+}
+
 interface Props {
   schedule: Schedule;
   darkMode: boolean;
@@ -210,6 +288,7 @@ interface Props {
   onClear: () => void;
   onRemoveCourseFromDay: (courseId: string, day: Day) => void;
   onEditCourse: (draft: CourseFormDraft) => void;
+  onMoveCourse: (draft: CourseMoveDraft) => void;
   onShare: () => void;
   shareState: { status: 'idle' | 'loading' | 'done' | 'error'; url?: string };
   onShareClose: () => void;
@@ -226,6 +305,7 @@ export default function ScheduleView({
   onClear,
   onRemoveCourseFromDay,
   onEditCourse,
+  onMoveCourse,
   onShare,
   shareState,
   onShareClose,
@@ -255,6 +335,10 @@ export default function ScheduleView({
   const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(
     null,
   );
+  const [drag, setDrag] = useState<DragState | null>(null);
+  const touchPressRef = useRef<TouchPressState | null>(null);
+  const touchLongPressTimerRef = useRef<number | null>(null);
+  const lastTapRef = useRef<LastTapState | null>(null);
 
   function buildEditDraft(block: DisplayCourseBlock, day: Day): CourseFormDraft {
     const source = block.courses[0];
@@ -275,6 +359,238 @@ export default function ScheduleView({
     ] as const);
     return new Map<Day, DisplayCourseBlock[]>(entries);
   }, [schedule]);
+
+  function candidateFromPointer(
+    clientX: number,
+    clientY: number,
+    rowSpan: number,
+    draggedIds: Set<string>,
+    fromDay: Day,
+  ): DragCandidate | null {
+    const grid = gridRef.current;
+    if (!grid) return null;
+
+    const rect = grid.getBoundingClientRect();
+    const dayWidth = (rect.width - 64) / DAYS.length;
+    const x = clientX - rect.left - 64;
+    const y = clientY - rect.top - 44;
+    const dayIndex = Math.min(
+      DAYS.length - 1,
+      Math.max(0, Math.floor(x / dayWidth)),
+    );
+    const maxStart = SLOTS.length - rowSpan;
+    const startSlot = Math.min(
+      maxStart,
+      Math.max(0, Math.floor(y / 56)),
+    );
+    const day = DAYS[dayIndex];
+    const valid = !(displayBlocksByDay.get(day) ?? []).some((block) => {
+      if (
+        day === fromDay &&
+        block.courses.some((course) => draggedIds.has(course.id))
+      ) {
+        return false;
+      }
+      return rangesOverlap(startSlot, rowSpan, block);
+    });
+
+    return {
+      day,
+      dayIndex,
+      start: formatSlotStart(startSlot),
+      end: formatSlotEnd(startSlot + rowSpan - 1),
+      rowStart: startSlot + SLOT_ROW_OFFSET,
+      rowSpan,
+      valid,
+    };
+  }
+
+  function openCourseActions(block: DisplayCourseBlock, day: Day) {
+    setPendingRemoval({
+      courses: block.courses,
+      name: block.name,
+      day,
+      block,
+    });
+  }
+
+  function clearTouchPress() {
+    if (touchLongPressTimerRef.current !== null) {
+      window.clearTimeout(touchLongPressTimerRef.current);
+      touchLongPressTimerRef.current = null;
+    }
+    touchPressRef.current = null;
+  }
+
+  function startDragFromPoint(
+    target: HTMLDivElement,
+    pointerId: number,
+    block: DisplayCourseBlock,
+    day: Day,
+    rowSpan: number,
+    clientX: number,
+    clientY: number,
+  ) {
+    if (isSharedView) return;
+    if (!target.hasPointerCapture(pointerId)) {
+      target.setPointerCapture(pointerId);
+    }
+    setTooltip(null);
+    const draggedIds = new Set(block.courses.map((course) => course.id));
+    const candidate = candidateFromPointer(
+      clientX,
+      clientY,
+      rowSpan,
+      draggedIds,
+      day,
+    );
+    if (!candidate) return;
+    setDrag({
+      block,
+      fromDay: day,
+      pointerId,
+      rowSpan,
+      candidate,
+    });
+  }
+
+  function beginDrag(
+    event: React.PointerEvent<HTMLDivElement>,
+    block: DisplayCourseBlock,
+    day: Day,
+    rowSpan: number,
+  ) {
+    if (event.button !== 0 || isSharedView) return;
+    event.preventDefault();
+    const target = event.currentTarget;
+    target.setPointerCapture(event.pointerId);
+
+    if (event.pointerType === "touch") {
+      clearTouchPress();
+      touchPressRef.current = {
+        block,
+        day,
+        rowSpan,
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        target,
+      };
+      touchLongPressTimerRef.current = window.setTimeout(() => {
+        const press = touchPressRef.current;
+        if (!press || press.pointerId !== event.pointerId) return;
+        startDragFromPoint(
+          press.target,
+          press.pointerId,
+          press.block,
+          press.day,
+          press.rowSpan,
+          press.startX,
+          press.startY,
+        );
+      }, TOUCH_LONG_PRESS_MS);
+      return;
+    }
+
+    startDragFromPoint(
+      target,
+      event.pointerId,
+      block,
+      day,
+      rowSpan,
+      event.clientX,
+      event.clientY,
+    );
+  }
+
+  function updateDrag(event: React.PointerEvent<HTMLDivElement>) {
+    const touchPress = touchPressRef.current;
+    if (touchPress && touchPress.pointerId === event.pointerId && !drag) {
+      const distance = Math.hypot(
+        event.clientX - touchPress.startX,
+        event.clientY - touchPress.startY,
+      );
+      if (distance > TOUCH_MOVE_CANCEL_PX) {
+        clearTouchPress();
+      }
+      return;
+    }
+
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const draggedIds = new Set(drag.block.courses.map((course) => course.id));
+    const candidate = candidateFromPointer(
+      event.clientX,
+      event.clientY,
+      drag.rowSpan,
+      draggedIds,
+      drag.fromDay,
+    );
+    if (!candidate) return;
+    setDrag({ ...drag, candidate });
+  }
+
+  function finishDrag(event: React.PointerEvent<HTMLDivElement>) {
+    const touchPress = touchPressRef.current;
+    if (touchPress && touchPress.pointerId === event.pointerId && !drag) {
+      const lastTap = lastTapRef.current;
+      const now = Date.now();
+      const isDoubleTap =
+        lastTap &&
+        lastTap.blockKey === touchPress.block.key &&
+        lastTap.day === touchPress.day &&
+        now - lastTap.time <= TOUCH_DOUBLE_TAP_MS &&
+        Math.hypot(event.clientX - lastTap.x, event.clientY - lastTap.y) <=
+          TOUCH_DOUBLE_TAP_PX;
+
+      clearTouchPress();
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+
+      if (isDoubleTap) {
+        lastTapRef.current = null;
+        openCourseActions(touchPress.block, touchPress.day);
+      } else {
+        lastTapRef.current = {
+          blockKey: touchPress.block.key,
+          day: touchPress.day,
+          time: now,
+          x: event.clientX,
+          y: event.clientY,
+        };
+      }
+      return;
+    }
+
+    clearTouchPress();
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    const candidate = drag.candidate;
+    if (candidate.valid) {
+      onMoveCourse({
+        ids: drag.block.courses.map((course) => course.id),
+        fromDay: drag.fromDay,
+        toDay: candidate.day,
+        name: drag.block.name,
+        startTime: candidate.start,
+        endTime: candidate.end,
+        color: drag.block.color,
+      });
+    }
+    setDrag(null);
+  }
+
+  function cancelPointerInteraction(event: React.PointerEvent<HTMLDivElement>) {
+    clearTouchPress();
+    if (
+      event.currentTarget.hasPointerCapture(event.pointerId)
+    ) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    setDrag(null);
+  }
 
   /**
    * Builds an off-screen capture wrapper with padding that contains a clone of
@@ -533,7 +849,11 @@ export default function ScheduleView({
       </div>
 
       <div className="sv-scroll">
-        <div className="sv-grid" ref={gridRef}>
+        <div
+          className="sv-grid"
+          ref={gridRef}
+          onContextMenu={(event) => event.preventDefault()}
+        >
           <div
             className="sv-corner"
             style={{ gridColumn: TIME_COL, gridRow: HEADER_ROW }}
@@ -581,10 +901,15 @@ export default function ScheduleView({
               const rowSpan = endHour - startHour + 1;
               const fg = contrastColor(block.color);
               const tipBelow = rowStart - SLOT_ROW_OFFSET < SLOTS.length / 2;
+              const isDragging =
+                drag?.fromDay === day &&
+                drag.block.courses.some((dragged) =>
+                  block.courses.some((course) => course.id === dragged.id),
+                );
               return (
                 <div
                   key={`${block.key}-${day}`}
-                  className={`sv-course-block${tipBelow ? " sv-course-block--tip-below" : ""}`}
+                  className={`sv-course-block${tipBelow ? " sv-course-block--tip-below" : ""}${isDragging ? " sv-course-block--dragging" : ""}`}
                   style={{
                     gridColumn: di + DAY_COL_OFFSET,
                     gridRow: `${rowStart} / span ${rowSpan}`,
@@ -594,10 +919,20 @@ export default function ScheduleView({
                       fg === "#ffffff"
                         ? "rgba(255,255,255,0.25)"
                         : "rgba(0,0,0,0.12)",
-                    cursor: isSharedView ? "default" : "pointer",
+                    cursor: isSharedView ? "default" : "grab",
                   }}
-                  onClick={() => { if (!isSharedView) setPendingRemoval({ courses: block.courses, name: block.name, day }) }}
+                  onPointerDown={(event) => beginDrag(event, block, day, rowSpan)}
+                  onPointerMove={updateDrag}
+                  onPointerUp={finishDrag}
+                  onPointerCancel={cancelPointerInteraction}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    if (!isSharedView) {
+                      openCourseActions(block, day);
+                    }
+                  }}
                   onMouseEnter={(e) => {
+                    if (drag) return;
                     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                     setTooltip({
                       block,
@@ -631,6 +966,22 @@ export default function ScheduleView({
                 </div>
               );
             }),
+          )}
+          {drag && (
+            <div
+              className={`sv-drag-preview${drag.candidate.valid ? " sv-drag-preview--valid" : " sv-drag-preview--invalid"}`}
+              style={{
+                gridColumn: drag.candidate.dayIndex + DAY_COL_OFFSET,
+                gridRow: `${drag.candidate.rowStart} / span ${drag.candidate.rowSpan}`,
+                backgroundColor: drag.block.color,
+                color: contrastColor(drag.block.color),
+              }}
+            >
+              <span className="sv-course-name">{drag.block.name}</span>
+              <span className="sv-drag-preview__meta">
+                {t(`dayAbbr.${drag.candidate.day}`)} {drag.candidate.start} - {drag.candidate.end}
+              </span>
+            </div>
           )}
         </div>
       </div>
@@ -695,12 +1046,20 @@ export default function ScheduleView({
                   onEditCourse(
                     buildEditDraft(
                       {
-                        key: pendingRemoval.courses.map((c) => c.id).join("-"),
+                        key:
+                          pendingRemoval.block?.key ??
+                          pendingRemoval.courses.map((c) => c.id).join("-"),
                         name: pendingRemoval.name,
                         courses: pendingRemoval.courses,
-                        start: pendingRemoval.courses[0].timeRange.start,
-                        end: pendingRemoval.courses[pendingRemoval.courses.length - 1].timeRange.end,
-                        color: pendingRemoval.courses[0].color.hex,
+                        start:
+                          pendingRemoval.block?.start ??
+                          pendingRemoval.courses[0].timeRange.start,
+                        end:
+                          pendingRemoval.block?.end ??
+                          pendingRemoval.courses[pendingRemoval.courses.length - 1].timeRange.end,
+                        color:
+                          pendingRemoval.block?.color ??
+                          pendingRemoval.courses[0].color.hex,
                       },
                       pendingRemoval.day,
                     ),
