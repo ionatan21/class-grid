@@ -20,11 +20,16 @@
   display: flex;
   flex-direction: column;
   transition: width 0.3s ease;
+  position: relative;
 }
 
 /* ── Collapsed sidebar (desktop only) ────────────────── */
 .app-sidebar--collapsed {
-  width: 90px;
+  width: 0;
+  padding: 0;
+  border-right: none;
+  overflow: visible;
+  box-shadow: none;
 }
 
 .app-sidebar--collapsed .app-sidebar__body {
@@ -34,6 +39,7 @@
   transition: opacity 0.15s ease, visibility 0.15s ease;
 }
 
+.app-sidebar--collapsed .app-brand__icon,
 .app-sidebar--collapsed .app-brand__name {
   opacity: 0;
   width: 0;
@@ -53,12 +59,35 @@
 }
 
 .app-sidebar--collapsed .app-brand {
-  padding: 1.1rem 0;
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  z-index: 30;
+  width: 2.35rem;
+  height: 2.35rem;
+  padding: 0;
+  border-radius: 0.55rem;
   justify-content: center;
+  background: transparent;
+  box-shadow: none;
 }
 
 .app-sidebar--collapsed .app-brand__collapse {
   margin-left: 0;
+  width: 2.35rem;
+  height: 2.35rem;
+  border-color: rgba(255,255,255,0.72);
+  background: #1e40af;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.18);
+}
+
+.app-sidebar--collapsed .app-brand__collapse:hover {
+  background: #1d4ed8;
+  border-color: rgba(255,255,255,0.85);
+}
+
+.app-sidebar--collapsed + .app-main .sv-toolbar {
+  padding-left: 4.35rem;
 }
 
 /* ── Brand header ──────────────────────────────────────────────────────────── */
@@ -224,6 +253,7 @@
     opacity: 1;
   }
 
+  .app-sidebar--collapsed .app-brand__icon,
   .app-sidebar--collapsed .app-brand__name {
     opacity: 1;
     width: auto;
@@ -238,8 +268,13 @@
   }
 
   .app-sidebar--collapsed .app-brand {
+    position: static;
+    width: auto;
+    height: auto;
     padding: 1.1rem 1.25rem;
     justify-content: flex-start;
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .app-brand__collapse {
@@ -283,6 +318,21 @@
 
 .dark .app-brand {
   background: #1e3a8a;
+}
+
+.dark .app-sidebar--collapsed .app-brand {
+  background: transparent;
+}
+
+.dark .app-sidebar--collapsed .app-brand__collapse {
+  background: #2563eb;
+  border-color: rgba(255,255,255,0.7);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+.dark .app-sidebar--collapsed .app-brand__collapse:hover {
+  background: #3b82f6;
+  border-color: rgba(255,255,255,0.9);
 }
 
 .dark .app-brand__toggle {
