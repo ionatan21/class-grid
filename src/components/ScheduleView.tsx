@@ -1,4 +1,4 @@
-import { useRef, useState, Fragment } from "react";
+import { useMemo, useRef, useState, Fragment } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation, Trans } from "react-i18next";
 import html2canvas from "html2canvas";
@@ -35,8 +35,65 @@ function contrastColor(hex: string): string {
 }
 
 interface PendingRemoval {
-  course: Course;
+  courses: Course[];
+  name: string;
   day: Day;
+}
+
+interface DisplayCourseBlock {
+  key: string;
+  name: string;
+  courses: Course[];
+  start: string;
+  end: string;
+  color: string;
+}
+
+function nextSlotStart(time: string): string {
+  const [hours, minutes] = time.split(":").map(Number);
+  const nextHour = minutes === 50 ? hours + 1 : hours;
+  return `${String(nextHour).padStart(2, "0")}:00`;
+}
+
+function isAdjacent(previous: Course, next: Course): boolean {
+  return (
+    previous.timeRange.end === next.timeRange.start ||
+    nextSlotStart(previous.timeRange.end) === next.timeRange.start
+  );
+}
+
+function canMerge(previous: DisplayCourseBlock, next: Course): boolean {
+  const lastCourse = previous.courses[previous.courses.length - 1];
+  return (
+    previous.name === next.name.trim() &&
+    previous.color === next.color.hex &&
+    isAdjacent(lastCourse, next)
+  );
+}
+
+function buildDisplayCourseBlocks(courses: readonly Course[]): DisplayCourseBlock[] {
+  const blocks: DisplayCourseBlock[] = [];
+
+  for (const course of courses) {
+    const previous = blocks[blocks.length - 1];
+    if (previous && canMerge(previous, course)) {
+      previous.courses.push(course);
+      previous.end = course.timeRange.end;
+      previous.key = `${previous.courses.map((c) => c.id).join("-")}`;
+      continue;
+    }
+
+    blocks.push({
+      key: course.id,
+      name: course.name.trim(),
+      courses: [course],
+      start: course.timeRange.start,
+      end: course.timeRange.end,
+      color: course.color.hex,
+    });
+  }
+
+  return blocks;
 }
 
 interface Props {
@@ -73,7 +130,8 @@ export default function ScheduleView({
   const [pendingClear, setPendingClear] = useState(false);
 
   const [tooltip, setTooltip] = useState<{
-    course: Course;
+    block: DisplayCourseBlock;
+    day: Day;
     x: number;
     blockTop: number;
     blockBottom: number;
@@ -88,6 +146,14 @@ export default function ScheduleView({
   const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(
     null,
   );
+
+  const displayBlocksByDay = useMemo(() => {
+    const entries = DAYS.map((day) => [
+      day,
+      buildDisplayCourseBlocks(schedule.getCoursesForDay(day)),
+    ] as const);
+    return new Map<Day, DisplayCourseBlock[]>(entries);
+  }, [schedule]);
 
   /**
    * Builds an off-screen capture wrapper with padding that contains a clone of
@@ -384,24 +450,24 @@ export default function ScheduleView({
             );
           })}
           {DAYS.map((day, di) =>
-            schedule.getCoursesForDay(day).map((course) => {
+            (displayBlocksByDay.get(day) ?? []).map((block) => {
               const startHour = parseInt(
-                course.timeRange.start.split(":")[0],
+                block.start.split(":")[0],
                 10,
               );
-              const endHour = parseInt(course.timeRange.end.split(":")[0], 10);
+              const endHour = parseInt(block.end.split(":")[0], 10);
               const rowStart = startHour - FIRST_HOUR + SLOT_ROW_OFFSET;
               const rowSpan = endHour - startHour + 1;
-              const fg = contrastColor(course.color.hex);
+              const fg = contrastColor(block.color);
               const tipBelow = rowStart - SLOT_ROW_OFFSET < SLOTS.length / 2;
               return (
                 <div
-                  key={`${course.id}-${day}`}
+                  key={`${block.key}-${day}`}
                   className={`sv-course-block${tipBelow ? " sv-course-block--tip-below" : ""}`}
                   style={{
                     gridColumn: di + DAY_COL_OFFSET,
                     gridRow: `${rowStart} / span ${rowSpan}`,
-                    backgroundColor: course.color.hex,
+                    backgroundColor: block.color,
                     color: fg,
                     borderColor:
                       fg === "#ffffff"
@@ -409,11 +475,12 @@ export default function ScheduleView({
                         : "rgba(0,0,0,0.12)",
                     cursor: isSharedView ? "default" : "pointer",
                   }}
-                  onClick={() => { if (!isSharedView) setPendingRemoval({ course, day }) }}
+                  onClick={() => { if (!isSharedView) setPendingRemoval({ courses: block.courses, name: block.name, day }) }}
                   onMouseEnter={(e) => {
                     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                     setTooltip({
-                      course,
+                      block,
+                      day,
                       x: rect.left + rect.width / 2,
                       blockTop: rect.top,
                       blockBottom: rect.bottom,
@@ -437,7 +504,7 @@ export default function ScheduleView({
                         : undefined
                     }
                   >
-                    {course.name}
+                    {block.name}
                   </span>
 
                 </div>
@@ -487,7 +554,7 @@ export default function ScheduleView({
               <Trans
                 i18nKey="scheduleView.modalMessage"
                 values={{
-                  course: pendingRemoval.course.name,
+                  course: pendingRemoval.name,
                   day: t(`days.${pendingRemoval.day}`),
                 }}
                 components={[<></>, <strong />, <></>, <strong />]}
@@ -504,9 +571,12 @@ export default function ScheduleView({
                 className="sv-modal__btn sv-modal__btn--confirm"
                 onClick={() => {
                   onRemoveCourseFromDay(
-                    pendingRemoval.course.id,
+                    pendingRemoval.courses[0].id,
                     pendingRemoval.day,
                   );
+                  pendingRemoval.courses.slice(1).forEach((course) => {
+                    onRemoveCourseFromDay(course.id, pendingRemoval.day);
+                  });
                   setPendingRemoval(null);
                 }}
               >
@@ -551,12 +621,12 @@ export default function ScheduleView({
               : { top: tooltip.blockTop - 7 }),
           }}
         >
-          <strong>{tooltip.course.name}</strong>
+          <strong>{tooltip.block.name}</strong>
           <span>
-            {tooltip.course.timeRange.start} &ndash; {tooltip.course.timeRange.end}
+            {tooltip.block.start} &ndash; {tooltip.block.end}
           </span>
           <span className="sv-tooltip-days">
-            {tooltip.course.days.map((d) => t(`days.${d}`)).join(", ")}
+            {t(`days.${tooltip.day}`)}
           </span>
         </div>,
         document.body,
