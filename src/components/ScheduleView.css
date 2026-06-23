@@ -17,12 +17,30 @@
 
 .sv-modal {
   background: #fff;
-  border-radius: 0.75rem;
-  padding: 1.5rem 1.75rem;
-  box-shadow: 0 20px 40px rgba(15, 23, 42, 0.2);
-  max-width: 340px;
+  border-radius: 0.65rem;
+  padding: 1.35rem;
+  box-shadow: 0 22px 48px rgba(15, 23, 42, 0.24);
+  max-width: 380px;
   width: 90%;
   animation: sv-modal-in 0.18s ease;
+  border: 1px solid #e2e8f0;
+}
+
+.sv-modal__swatch {
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+  margin-bottom: 0.85rem;
+}
+
+.sv-modal__title {
+  font-size: 1.05rem;
+  line-height: 1.25;
+  margin: 0 0 0.35rem;
+  color: #0f172a;
+  font-weight: 750;
 }
 
 @keyframes sv-modal-in {
@@ -31,9 +49,9 @@
 }
 
 .sv-modal__message {
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   color: #334155;
-  margin: 0 0 1.25rem;
+  margin: 0 0 1.1rem;
   line-height: 1.5;
 }
 
@@ -43,39 +61,57 @@
 
 .sv-modal__actions {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 0.6rem;
 }
 
 .sv-modal__btn {
-  padding: 0.4rem 1.1rem;
+  padding: 0.48rem 0.9rem;
   border-radius: 0.45rem;
   font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
   border: 1px solid transparent;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
+}
+
+.sv-modal__btn:active {
+  transform: scale(0.98);
 }
 
 .sv-modal__btn--cancel {
-  background: #f1f5f9;
+  background: #fff;
   border-color: #e2e8f0;
   color: #475569;
 }
 
 .sv-modal__btn--cancel:hover {
-  background: #e2e8f0;
+  background: #f8fafc;
+}
+
+.sv-modal__btn--edit {
+  background: #1e40af;
+  border-color: #1e40af;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(30, 64, 175, 0.25);
+}
+
+.sv-modal__btn--edit:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
 }
 
 .sv-modal__btn--confirm {
-  background: #dc2626;
-  border-color: #dc2626;
-  color: #fff;
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #b91c1c;
 }
 
 .sv-modal__btn--confirm:hover {
-  background: #b91c1c;
-  border-color: #b91c1c;
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
 }
 
 /* ── Toolbar ────────────────────────────────────────────────── */

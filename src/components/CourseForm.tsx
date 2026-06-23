@@ -26,15 +26,45 @@ const EMPTY_FORM = {
   color: PRESET_COLORS[0],
 }
 
+export interface CourseFormDraft {
+  ids: string[]
+  name: string
+  days: Day[]
+  startTime: string
+  endTime: string
+  color: string
+}
+
+function formFromDraft(draft: CourseFormDraft | null) {
+  if (!draft) return EMPTY_FORM
+  return {
+    name: draft.name,
+    days: draft.days,
+    startTime: draft.startTime,
+    endTime: draft.endTime,
+    color: draft.color,
+  }
+}
+
 interface Props {
   schedule: Schedule
   onAdd: (course: Course) => void
+  onUpdate: (courseIds: string[], course: Course) => void
+  editingDraft: CourseFormDraft | null
+  onCancelEdit: () => void
   isSharedView?: boolean
 }
 
-export default function CourseForm({ schedule, onAdd, isSharedView = false }: Props) {
+export default function CourseForm({
+  schedule,
+  onAdd,
+  onUpdate,
+  editingDraft,
+  onCancelEdit,
+  isSharedView = false,
+}: Props) {
   const { t } = useTranslation()
-  const [form, setForm] = useState(EMPTY_FORM)
+  const [form, setForm] = useState(() => formFromDraft(editingDraft))
   const [touched, setTouched] = useState(false)
 
   /* ── validations ─────────────────────────────────────── */
@@ -89,8 +119,13 @@ export default function CourseForm({ schedule, onAdd, isSharedView = false }: Pr
         form.days,
         new TimeRange(form.startTime, form.endTime),
         new CourseColor(form.color),
+        editingDraft?.ids[0],
       )
-      onAdd(course)
+      if (editingDraft) {
+        onUpdate(editingDraft.ids, course)
+      } else {
+        onAdd(course)
+      }
       setForm(EMPTY_FORM)
       setTouched(false)
     } catch (err) {
@@ -101,7 +136,9 @@ export default function CourseForm({ schedule, onAdd, isSharedView = false }: Pr
   /* ── render ──────────────────────────────────────────── */
   return (
     <form className="course-form" onSubmit={handleSubmit} noValidate>
-      <h2 className="cf-title">{t('courseForm.title')}</h2>
+      <h2 className="cf-title">
+        {editingDraft ? t('courseForm.editTitle') : t('courseForm.title')}
+      </h2>
       {isSharedView && (
         <p className="cf-readonly-notice">{t('courseForm.readOnlyNotice')}</p>
       )}
@@ -227,8 +264,21 @@ export default function CourseForm({ schedule, onAdd, isSharedView = false }: Pr
       {/* Actions */}
       <div className="cf-actions">
         <button type="submit" className="cf-btn cf-btn--primary">
-          {t('courseForm.addBtn')}
+          {editingDraft ? t('courseForm.saveBtn') : t('courseForm.addBtn')}
         </button>
+        {editingDraft && (
+          <button
+            type="button"
+            className="cf-btn cf-btn--ghost"
+            onClick={() => {
+              setForm(EMPTY_FORM)
+              setTouched(false)
+              onCancelEdit()
+            }}
+          >
+            {t('courseForm.cancelEdit')}
+          </button>
+        )}
       </div>
 
       {/* Footer */}

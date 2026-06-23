@@ -4,6 +4,7 @@ import logo from './assets/logo.svg'
 import iconMoon from './assets/icon-moon.svg'
 import iconSun from './assets/icon-sun.svg'
 import CourseForm from './components/CourseForm'
+import type { CourseFormDraft } from './components/CourseForm'
 import ScheduleView from './components/ScheduleView'
 import { Schedule, Course, CourseColor, TimeRange } from './domain'
 import type { Day } from './domain'
@@ -71,6 +72,7 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(
     () => localStorage.getItem('sidebarCollapsed') === 'true',
   )
+  const [editingDraft, setEditingDraft] = useState<CourseFormDraft | null>(null)
   const mainRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
@@ -187,6 +189,15 @@ function App() {
     return s
   }, [displayedCourses])
 
+  const formSchedule = useMemo(() => {
+    const s = new Schedule()
+    const editingIds = new Set(editingDraft?.ids ?? [])
+    for (const c of displayedCourses) {
+      if (!editingIds.has(c.id)) s.tryAddCourse(c)
+    }
+    return s
+  }, [displayedCourses, editingDraft])
+
   function handleAddCourse(course: Course) {
     clearShareId()
     setCourses((prev) => {
@@ -244,11 +255,15 @@ function App() {
 
   function handleClear() {
     clearShareId()
+    setEditingDraft(null)
     clearCourses()
   }
 
   function handleRemoveCourseFromDay(courseId: string, day: Day) {
     clearShareId()
+    setEditingDraft((draft) =>
+      draft?.ids.includes(courseId) ? null : draft,
+    )
     setCourses((prev) =>
       prev.flatMap((c) => {
         if (c.id !== courseId) return [c]
@@ -257,6 +272,25 @@ function App() {
         return [c.with({ days: newDays })]
       }),
     )
+  }
+
+  function handleEditCourse(draft: CourseFormDraft) {
+    setEditingDraft(draft)
+    setSidebarCollapsed(false)
+    setSidebarOpen(true)
+  }
+
+  function handleUpdateCourse(courseIds: string[], course: Course) {
+    clearShareId()
+    const ids = new Set(courseIds)
+    setCourses((prev) => [...prev.filter((c) => !ids.has(c.id)), course])
+    setEditingDraft(null)
+    if (window.innerWidth <= 768) {
+      setSidebarOpen(false)
+      setTimeout(() => {
+        mainRef.current?.scrollIntoView({ behavior: 'smooth' })
+      }, 50)
+    }
   }
 
   return (
@@ -298,7 +332,15 @@ function App() {
           </button>
         </div>
         <div className="app-sidebar__body">
-          <CourseForm schedule={schedule} onAdd={handleAddCourse} isSharedView={isSharedView} />
+          <CourseForm
+            key={editingDraft ? `edit-${editingDraft.ids.join('-')}` : 'create'}
+            schedule={formSchedule}
+            onAdd={handleAddCourse}
+            onUpdate={handleUpdateCourse}
+            editingDraft={editingDraft}
+            onCancelEdit={() => setEditingDraft(null)}
+            isSharedView={isSharedView}
+          />
         </div>
       </aside>
 
@@ -309,6 +351,7 @@ function App() {
           onToggleDark={() => setDarkMode((d) => !d)}
           onClear={handleClear}
           onRemoveCourseFromDay={handleRemoveCourseFromDay}
+          onEditCourse={handleEditCourse}
           onShare={handleShare}
           shareState={shareState}
           onShareClose={handleShareClose}

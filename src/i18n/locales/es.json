@@ -1,6 +1,7 @@
 {
   "courseForm": {
     "title": "Crear curso",
+    "editTitle": "Editar curso",
     "nameLabel": "Nombre del curso",
     "namePlaceholder": "Ej. Cálculo I",
     "nameRequired": "Este campo es obligatorio.",
@@ -11,6 +12,8 @@
     "colorLabel": "Color",
     "colorCustomTitle": "Color personalizado",
     "addBtn": "Agregar curso",
+    "saveBtn": "Guardar cambios",
+    "cancelEdit": "Cancelar edición",
     "timeError": "La hora de finalización debe ser mayor que la de inicio.",
     "endTimeRequired": "Selecciona una hora de finalización.",
     "conflict": "Conflicto con \"{{name}}\" el día {{day}}",
@@ -35,7 +38,9 @@
     "clearConfirmBtn": "Limpiar todo",
     "timeCol": "Hora",
     "modalMessage": "¿Eliminar <1>{{course}}</1> del <3>{{day}}</3>?",
+    "courseActionMessage": "Edita los datos de <1>{{course}}</1> o elimínalo del <3>{{day}}</3>.",
     "cancel": "Cancelar",
+    "edit": "Editar",
     "delete": "Eliminar",
     "shareTitle": "Compartir horario",
     "shareLabel": "Compartir",

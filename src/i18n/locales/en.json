@@ -1,6 +1,7 @@
 {
   "courseForm": {
     "title": "Create course",
+    "editTitle": "Edit course",
     "nameLabel": "Course name",
     "namePlaceholder": "E.g. Calculus I",
     "nameRequired": "This field is required.",
@@ -11,6 +12,8 @@
     "colorLabel": "Color",
     "colorCustomTitle": "Custom color",
     "addBtn": "Add course",
+    "saveBtn": "Save changes",
+    "cancelEdit": "Cancel edit",
     "timeError": "End time must be after start time.",
     "endTimeRequired": "Please select an end time.",
     "conflict": "Conflict with \"{{name}}\" on {{day}}",
@@ -35,7 +38,9 @@
     "clearConfirmBtn": "Clear all",
     "timeCol": "Time",
     "modalMessage": "Remove <1>{{course}}</1> from <3>{{day}}</3>?",
+    "courseActionMessage": "Edit <1>{{course}}</1> details or remove it from <3>{{day}}</3>.",
     "cancel": "Cancel",
+    "edit": "Edit",
     "delete": "Remove",
     "shareTitle": "Share schedule",
     "shareLabel": "Share",

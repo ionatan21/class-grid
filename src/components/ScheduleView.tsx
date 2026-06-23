@@ -6,6 +6,7 @@ import jsPDF from "jspdf";
 import * as XLSX from "xlsx";
 import { DAYS, TimeSlot } from "../domain";
 import type { Schedule, Day, Course } from "../domain";
+import type { CourseFormDraft } from "./CourseForm";
 import iconImage from "../assets/icon-image.svg";
 import iconImageWhite from "../assets/icon-image-white.svg";
 import iconPdf from "../assets/icon-pdf.svg";
@@ -208,6 +209,7 @@ interface Props {
   onToggleDark: () => void;
   onClear: () => void;
   onRemoveCourseFromDay: (courseId: string, day: Day) => void;
+  onEditCourse: (draft: CourseFormDraft) => void;
   onShare: () => void;
   shareState: { status: 'idle' | 'loading' | 'done' | 'error'; url?: string };
   onShareClose: () => void;
@@ -223,6 +225,7 @@ export default function ScheduleView({
   onToggleDark,
   onClear,
   onRemoveCourseFromDay,
+  onEditCourse,
   onShare,
   shareState,
   onShareClose,
@@ -252,6 +255,18 @@ export default function ScheduleView({
   const [pendingRemoval, setPendingRemoval] = useState<PendingRemoval | null>(
     null,
   );
+
+  function buildEditDraft(block: DisplayCourseBlock, day: Day): CourseFormDraft {
+    const source = block.courses[0];
+    return {
+      ids: block.courses.map((course) => course.id),
+      name: block.name,
+      days: block.courses.length === 1 ? [...source.days] : [day],
+      startTime: block.start,
+      endTime: block.end,
+      color: block.color,
+    };
+  }
 
   const displayBlocksByDay = useMemo(() => {
     const entries = DAYS.map((day) => [
@@ -656,9 +671,16 @@ export default function ScheduleView({
           onClick={() => setPendingRemoval(null)}
         >
           <div className="sv-modal" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="sv-modal__swatch"
+              style={{ backgroundColor: pendingRemoval.courses[0].color.hex }}
+            />
+            <h3 className="sv-modal__title">
+              {pendingRemoval.name}
+            </h3>
             <p className="sv-modal__message">
               <Trans
-                i18nKey="scheduleView.modalMessage"
+                i18nKey="scheduleView.courseActionMessage"
                 values={{
                   course: pendingRemoval.name,
                   day: t(`days.${pendingRemoval.day}`),
@@ -667,6 +689,27 @@ export default function ScheduleView({
               />
             </p>
             <div className="sv-modal__actions">
+              <button
+                className="sv-modal__btn sv-modal__btn--edit"
+                onClick={() => {
+                  onEditCourse(
+                    buildEditDraft(
+                      {
+                        key: pendingRemoval.courses.map((c) => c.id).join("-"),
+                        name: pendingRemoval.name,
+                        courses: pendingRemoval.courses,
+                        start: pendingRemoval.courses[0].timeRange.start,
+                        end: pendingRemoval.courses[pendingRemoval.courses.length - 1].timeRange.end,
+                        color: pendingRemoval.courses[0].color.hex,
+                      },
+                      pendingRemoval.day,
+                    ),
+                  );
+                  setPendingRemoval(null);
+                }}
+              >
+                {t("scheduleView.edit")}
+              </button>
               <button
                 className="sv-modal__btn sv-modal__btn--cancel"
                 onClick={() => setPendingRemoval(null)}
