@@ -372,6 +372,33 @@
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
 }
 
+.sv-course-block--arming {
+  transform: scale(1.02);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.24), 0 4px 14px rgba(0, 0, 0, 0.18);
+}
+
+.sv-course-block--arming::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.36) 0%,
+      rgba(255, 255, 255, 0.52) 45%,
+      rgba(255, 255, 255, 0.12) 100%
+    );
+  transform-origin: left center;
+  animation: sv-drag-arm 0.5s linear forwards;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+
+.sv-course-block--arming:hover {
+  transform: scale(1.02);
+}
+
 .sv-course-block--dragging {
   opacity: 0.24;
   transform: scale(0.98);
@@ -514,6 +541,17 @@
   to {
     opacity: 1;
     transform: scaleY(1);
+  }
+}
+
+@keyframes sv-drag-arm {
+  from {
+    transform: scaleX(0);
+    opacity: 0.85;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 0.45;
   }
 }
 

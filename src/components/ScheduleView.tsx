@@ -26,8 +26,8 @@ const SLOT_ROW_OFFSET = 2;
 const TIME_COL = 1;
 const DAY_COL_OFFSET = 2;
 const MIN_TEXT_CONTRAST = 4.5;
-const TOUCH_LONG_PRESS_MS = 420;
-const TOUCH_MOVE_CANCEL_PX = 14;
+const DRAG_ARM_PRESS_MS = 500;
+const DRAG_ARM_MOVE_CANCEL_PX = 14;
 const TOUCH_DOUBLE_TAP_MS = 360;
 const TOUCH_DOUBLE_TAP_PX = 28;
 
@@ -179,11 +179,12 @@ interface DragState {
   candidate: DragCandidate;
 }
 
-interface TouchPressState {
+interface DragPressState {
   block: DisplayCourseBlock;
   day: Day;
   rowSpan: number;
   pointerId: number;
+  pointerType: string;
   startX: number;
   startY: number;
   target: HTMLDivElement;
@@ -336,8 +337,9 @@ export default function ScheduleView({
     null,
   );
   const [drag, setDrag] = useState<DragState | null>(null);
-  const touchPressRef = useRef<TouchPressState | null>(null);
-  const touchLongPressTimerRef = useRef<number | null>(null);
+  const [armingDrag, setArmingDrag] = useState<DragPressState | null>(null);
+  const dragPressRef = useRef<DragPressState | null>(null);
+  const dragArmTimerRef = useRef<number | null>(null);
   const lastTapRef = useRef<LastTapState | null>(null);
 
   function buildEditDraft(block: DisplayCourseBlock, day: Day): CourseFormDraft {
@@ -414,12 +416,13 @@ export default function ScheduleView({
     });
   }
 
-  function clearTouchPress() {
-    if (touchLongPressTimerRef.current !== null) {
-      window.clearTimeout(touchLongPressTimerRef.current);
-      touchLongPressTimerRef.current = null;
+  function clearDragPress() {
+    if (dragArmTimerRef.current !== null) {
+      window.clearTimeout(dragArmTimerRef.current);
+      dragArmTimerRef.current = null;
     }
-    touchPressRef.current = null;
+    dragPressRef.current = null;
+    setArmingDrag(null);
   }
 
   function startDragFromPoint(
@@ -465,53 +468,44 @@ export default function ScheduleView({
     const target = event.currentTarget;
     target.setPointerCapture(event.pointerId);
 
-    if (event.pointerType === "touch") {
-      clearTouchPress();
-      touchPressRef.current = {
-        block,
-        day,
-        rowSpan,
-        pointerId: event.pointerId,
-        startX: event.clientX,
-        startY: event.clientY,
-        target,
-      };
-      touchLongPressTimerRef.current = window.setTimeout(() => {
-        const press = touchPressRef.current;
-        if (!press || press.pointerId !== event.pointerId) return;
-        startDragFromPoint(
-          press.target,
-          press.pointerId,
-          press.block,
-          press.day,
-          press.rowSpan,
-          press.startX,
-          press.startY,
-        );
-      }, TOUCH_LONG_PRESS_MS);
-      return;
-    }
-
-    startDragFromPoint(
-      target,
-      event.pointerId,
+    clearDragPress();
+    const press = {
       block,
       day,
       rowSpan,
-      event.clientX,
-      event.clientY,
-    );
+      pointerId: event.pointerId,
+      pointerType: event.pointerType,
+      startX: event.clientX,
+      startY: event.clientY,
+      target,
+    };
+    dragPressRef.current = press;
+    setArmingDrag(press);
+    dragArmTimerRef.current = window.setTimeout(() => {
+      const activePress = dragPressRef.current;
+      if (!activePress || activePress.pointerId !== event.pointerId) return;
+      startDragFromPoint(
+        activePress.target,
+        activePress.pointerId,
+        activePress.block,
+        activePress.day,
+        activePress.rowSpan,
+        activePress.startX,
+        activePress.startY,
+      );
+      clearDragPress();
+    }, DRAG_ARM_PRESS_MS);
   }
 
   function updateDrag(event: React.PointerEvent<HTMLDivElement>) {
-    const touchPress = touchPressRef.current;
-    if (touchPress && touchPress.pointerId === event.pointerId && !drag) {
+    const dragPress = dragPressRef.current;
+    if (dragPress && dragPress.pointerId === event.pointerId && !drag) {
       const distance = Math.hypot(
-        event.clientX - touchPress.startX,
-        event.clientY - touchPress.startY,
+        event.clientX - dragPress.startX,
+        event.clientY - dragPress.startY,
       );
-      if (distance > TOUCH_MOVE_CANCEL_PX) {
-        clearTouchPress();
+      if (distance > DRAG_ARM_MOVE_CANCEL_PX) {
+        clearDragPress();
       }
       return;
     }
@@ -530,30 +524,31 @@ export default function ScheduleView({
   }
 
   function finishDrag(event: React.PointerEvent<HTMLDivElement>) {
-    const touchPress = touchPressRef.current;
-    if (touchPress && touchPress.pointerId === event.pointerId && !drag) {
+    const dragPress = dragPressRef.current;
+    if (dragPress && dragPress.pointerId === event.pointerId && !drag) {
       const lastTap = lastTapRef.current;
       const now = Date.now();
       const isDoubleTap =
+        dragPress.pointerType === "touch" &&
         lastTap &&
-        lastTap.blockKey === touchPress.block.key &&
-        lastTap.day === touchPress.day &&
+        lastTap.blockKey === dragPress.block.key &&
+        lastTap.day === dragPress.day &&
         now - lastTap.time <= TOUCH_DOUBLE_TAP_MS &&
         Math.hypot(event.clientX - lastTap.x, event.clientY - lastTap.y) <=
           TOUCH_DOUBLE_TAP_PX;
 
-      clearTouchPress();
+      clearDragPress();
       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
         event.currentTarget.releasePointerCapture(event.pointerId);
       }
 
       if (isDoubleTap) {
         lastTapRef.current = null;
-        openCourseActions(touchPress.block, touchPress.day);
-      } else {
+        openCourseActions(dragPress.block, dragPress.day);
+      } else if (dragPress.pointerType === "touch") {
         lastTapRef.current = {
-          blockKey: touchPress.block.key,
-          day: touchPress.day,
+          blockKey: dragPress.block.key,
+          day: dragPress.day,
           time: now,
           x: event.clientX,
           y: event.clientY,
@@ -562,7 +557,7 @@ export default function ScheduleView({
       return;
     }
 
-    clearTouchPress();
+    clearDragPress();
     if (!drag || drag.pointerId !== event.pointerId) return;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
@@ -583,7 +578,7 @@ export default function ScheduleView({
   }
 
   function cancelPointerInteraction(event: React.PointerEvent<HTMLDivElement>) {
-    clearTouchPress();
+    clearDragPress();
     if (
       event.currentTarget.hasPointerCapture(event.pointerId)
     ) {
@@ -906,10 +901,15 @@ export default function ScheduleView({
                 drag.block.courses.some((dragged) =>
                   block.courses.some((course) => course.id === dragged.id),
                 );
+              const isArmingDrag =
+                armingDrag?.day === day &&
+                armingDrag.block.courses.some((armed) =>
+                  block.courses.some((course) => course.id === armed.id),
+                );
               return (
                 <div
                   key={`${block.key}-${day}`}
-                  className={`sv-course-block${tipBelow ? " sv-course-block--tip-below" : ""}${isDragging ? " sv-course-block--dragging" : ""}`}
+                  className={`sv-course-block${tipBelow ? " sv-course-block--tip-below" : ""}${isDragging ? " sv-course-block--dragging" : ""}${isArmingDrag ? " sv-course-block--arming" : ""}`}
                   style={{
                     gridColumn: di + DAY_COL_OFFSET,
                     gridRow: `${rowStart} / span ${rowSpan}`,
