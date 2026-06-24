@@ -198,6 +198,22 @@
   color: #dc2626;
 }
 
+.sv-btn--mobile-action {
+  display: none;
+}
+
+.sv-btn--mobile-delete.sv-btn--active {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+}
+
+.sv-btn--mobile-delete.sv-btn--active:hover {
+  background: #b91c1c;
+  border-color: #b91c1c;
+  color: #fff;
+}
+
 .sv-toolbar__sep {
   width: 1px;
   height: 1.25rem;
@@ -221,6 +237,10 @@
 
   .sv-btn--dark {
     display: none;
+  }
+
+  .sv-btn--mobile-action {
+    display: inline-flex;
   }
 
   .sv-btn--w-lg,

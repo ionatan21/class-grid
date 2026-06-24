@@ -19,8 +19,8 @@
     "conflict": "Conflict with \"{{name}}\" on {{day}}",
     "footer": "Created by",
     "footerAuthor": "Jonatan Barrios",
-    "desktopHelp": "On desktop: hold left click on a course to move it. Right click to edit or remove it.",
-    "mobileHelp": "On mobile: press and hold a course to move it. Double tap to edit or remove it.",
+    "desktopHelp": "Hold left click on a course to move it. Right click to edit or remove it.",
+    "mobileHelp": "Use the pencil or eraser buttons to edit or remove. Press and hold a course to move it when those modes are off.",
     "readOnlyNotice": "Read-only schedule. Make it yours to edit it."
   },
   "scheduleView": {
@@ -41,6 +41,12 @@
     "timeCol": "Time",
     "modalMessage": "Remove <1>{{course}}</1> from <3>{{day}}</3>?",
     "courseActionMessage": "Edit <1>{{course}}</1> details or remove it from <3>{{day}}</3>.",
+    "editModeTitle": "Edit mode",
+    "deleteModeTitle": "Delete mode",
+    "mobileEditMessage": "Edit <1>{{course}}</1> from <3>{{day}}</3>?",
+    "mobileDeleteMessage": "Remove <1>{{course}}</1> from <3>{{day}}</3>?",
+    "mobileEditConfirm": "Edit course",
+    "mobileDeleteConfirm": "Remove course",
     "cancel": "Cancel",
     "edit": "Edit",
     "delete": "Remove",

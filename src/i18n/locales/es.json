@@ -19,8 +19,8 @@
     "conflict": "Conflicto con \"{{name}}\" el día {{day}}",
     "footer": "Creado por",
     "footerAuthor": "Jonatan Barrios",
-    "desktopHelp": "En escritorio: mantén presionado clic izquierdo sobre un curso para moverlo. Usa clic derecho para editarlo o eliminarlo.",
-    "mobileHelp": "En móvil: mantén presionado un curso para moverlo. Haz doble toque para editarlo o eliminarlo.",
+    "desktopHelp": "Mantén presionado clic izquierdo sobre un curso para moverlo. Usa clic derecho para editarlo o eliminarlo.",
+    "mobileHelp": "Usa los botones de lápiz o borrador para editar o eliminar. Mantén presionado un curso para moverlo cuando esos modos estén apagados.",
     "readOnlyNotice": "Horario en modo lectura. Hazlo tuyo para editarlo."
   },
   "scheduleView": {
@@ -41,6 +41,12 @@
     "timeCol": "Hora",
     "modalMessage": "¿Eliminar <1>{{course}}</1> del <3>{{day}}</3>?",
     "courseActionMessage": "Edita los datos de <1>{{course}}</1> o elimínalo del <3>{{day}}</3>.",
+    "editModeTitle": "Modo edición",
+    "deleteModeTitle": "Modo eliminación",
+    "mobileEditMessage": "¿Editar <1>{{course}}</1> del <3>{{day}}</3>?",
+    "mobileDeleteMessage": "¿Eliminar <1>{{course}}</1> del <3>{{day}}</3>?",
+    "mobileEditConfirm": "Editar curso",
+    "mobileDeleteConfirm": "Eliminar curso",
     "cancel": "Cancelar",
     "edit": "Editar",
     "delete": "Eliminar",

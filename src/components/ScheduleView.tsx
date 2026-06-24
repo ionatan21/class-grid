@@ -17,6 +17,10 @@ import iconMoon from "../assets/icon-moon.svg";
 import iconSun from "../assets/icon-sun.svg";
 import iconTrash from "../assets/icon-trash.svg";
 import iconTrashWhite from "../assets/icon-trash-white.svg";
+import iconPencil from "../assets/pencil.svg";
+import iconPencilWhite from "../assets/pencil-white.svg";
+import iconEraser from "../assets/eraser.svg";
+import iconEraserWhite from "../assets/eraser-white.svg";
 import "./ScheduleView.css";
 
 const SLOTS = TimeSlot.ALL;
@@ -28,8 +32,6 @@ const DAY_COL_OFFSET = 2;
 const MIN_TEXT_CONTRAST = 4.5;
 const DRAG_ARM_PRESS_MS = 500;
 const DRAG_ARM_MOVE_CANCEL_PX = 14;
-const TOUCH_DOUBLE_TAP_MS = 360;
-const TOUCH_DOUBLE_TAP_PX = 28;
 
 interface RgbColor {
   r: number;
@@ -152,6 +154,14 @@ interface PendingRemoval {
   block?: DisplayCourseBlock;
 }
 
+type MobileActionMode = "edit" | "delete";
+
+interface PendingMobileAction {
+  mode: MobileActionMode;
+  block: DisplayCourseBlock;
+  day: Day;
+}
+
 interface DisplayCourseBlock {
   key: string;
   name: string;
@@ -188,14 +198,6 @@ interface DragPressState {
   startX: number;
   startY: number;
   target: HTMLDivElement;
-}
-
-interface LastTapState {
-  blockKey: string;
-  day: Day;
-  time: number;
-  x: number;
-  y: number;
 }
 
 export interface CourseMoveDraft {
@@ -318,6 +320,10 @@ export default function ScheduleView({
   const { t, i18n } = useTranslation();
   const gridRef = useRef<HTMLDivElement>(null);
   const [pendingClear, setPendingClear] = useState(false);
+  const [mobileActionMode, setMobileActionMode] =
+    useState<MobileActionMode | null>(null);
+  const [pendingMobileAction, setPendingMobileAction] =
+    useState<PendingMobileAction | null>(null);
 
   const [tooltip, setTooltip] = useState<{
     block: DisplayCourseBlock;
@@ -340,7 +346,6 @@ export default function ScheduleView({
   const [armingDrag, setArmingDrag] = useState<DragPressState | null>(null);
   const dragPressRef = useRef<DragPressState | null>(null);
   const dragArmTimerRef = useRef<number | null>(null);
-  const lastTapRef = useRef<LastTapState | null>(null);
 
   function buildEditDraft(block: DisplayCourseBlock, day: Day): CourseFormDraft {
     const source = block.courses[0];
@@ -416,6 +421,22 @@ export default function ScheduleView({
     });
   }
 
+  function openMobileCourseAction(block: DisplayCourseBlock, day: Day) {
+    if (!mobileActionMode || isSharedView) return;
+    setPendingMobileAction({
+      mode: mobileActionMode,
+      block,
+      day,
+    });
+  }
+
+  function removeBlockFromDay(block: DisplayCourseBlock, day: Day) {
+    onRemoveCourseFromDay(block.courses[0].id, day);
+    block.courses.slice(1).forEach((course) => {
+      onRemoveCourseFromDay(course.id, day);
+    });
+  }
+
   function clearDragPress() {
     if (dragArmTimerRef.current !== null) {
       window.clearTimeout(dragArmTimerRef.current);
@@ -464,6 +485,9 @@ export default function ScheduleView({
     rowSpan: number,
   ) {
     if (event.button !== 0 || isSharedView) return;
+    if (mobileActionMode) {
+      return;
+    }
     event.preventDefault();
     const target = event.currentTarget;
     target.setPointerCapture(event.pointerId);
@@ -526,33 +550,9 @@ export default function ScheduleView({
   function finishDrag(event: React.PointerEvent<HTMLDivElement>) {
     const dragPress = dragPressRef.current;
     if (dragPress && dragPress.pointerId === event.pointerId && !drag) {
-      const lastTap = lastTapRef.current;
-      const now = Date.now();
-      const isDoubleTap =
-        dragPress.pointerType === "touch" &&
-        lastTap &&
-        lastTap.blockKey === dragPress.block.key &&
-        lastTap.day === dragPress.day &&
-        now - lastTap.time <= TOUCH_DOUBLE_TAP_MS &&
-        Math.hypot(event.clientX - lastTap.x, event.clientY - lastTap.y) <=
-          TOUCH_DOUBLE_TAP_PX;
-
       clearDragPress();
       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
         event.currentTarget.releasePointerCapture(event.pointerId);
-      }
-
-      if (isDoubleTap) {
-        lastTapRef.current = null;
-        openCourseActions(dragPress.block, dragPress.day);
-      } else if (dragPress.pointerType === "touch") {
-        lastTapRef.current = {
-          blockKey: dragPress.block.key,
-          day: dragPress.day,
-          time: now,
-          x: event.clientX,
-          y: event.clientY,
-        };
       }
       return;
     }
@@ -809,6 +809,51 @@ export default function ScheduleView({
           <div className="sv-toolbar__sep" />
 
           <button
+            className={`sv-btn sv-btn--mobile-action${mobileActionMode === "edit" ? " sv-btn--active" : ""}`}
+            onClick={() =>
+              setMobileActionMode((mode) => (mode === "edit" ? null : "edit"))
+            }
+            title={t("scheduleView.editModeTitle")}
+            aria-pressed={mobileActionMode === "edit"}
+            disabled={isSharedView}
+          >
+            <img
+              className="sv-btn__icon"
+              src={
+                mobileActionMode === "edit"
+                  ? iconPencilWhite
+                  : darkMode
+                    ? iconPencilWhite
+                    : iconPencil
+              }
+              alt=""
+            />
+          </button>
+          <button
+            className={`sv-btn sv-btn--mobile-action sv-btn--mobile-delete${mobileActionMode === "delete" ? " sv-btn--active" : ""}`}
+            onClick={() =>
+              setMobileActionMode((mode) =>
+                mode === "delete" ? null : "delete",
+              )
+            }
+            title={t("scheduleView.deleteModeTitle")}
+            aria-pressed={mobileActionMode === "delete"}
+            disabled={isSharedView}
+          >
+            <img
+              className="sv-btn__icon"
+              src={
+                mobileActionMode === "delete"
+                  ? iconEraserWhite
+                  : darkMode
+                    ? iconEraserWhite
+                    : iconEraser
+              }
+              alt=""
+            />
+          </button>
+
+          <button
             className={`sv-btn sv-btn--dark${darkMode ? " sv-btn--active" : ""}`}
             onClick={onToggleDark}
             title={t("scheduleView.darkModeTitle")}
@@ -919,15 +964,26 @@ export default function ScheduleView({
                       fg === "#ffffff"
                         ? "rgba(255,255,255,0.25)"
                         : "rgba(0,0,0,0.12)",
-                    cursor: isSharedView ? "default" : "grab",
+                    cursor: isSharedView
+                      ? "default"
+                      : mobileActionMode
+                        ? "pointer"
+                        : "grab",
                   }}
                   onPointerDown={(event) => beginDrag(event, block, day, rowSpan)}
                   onPointerMove={updateDrag}
                   onPointerUp={finishDrag}
                   onPointerCancel={cancelPointerInteraction}
+                  onClick={() => {
+                    if (mobileActionMode) {
+                      openMobileCourseAction(block, day);
+                    }
+                  }}
                   onContextMenu={(event) => {
                     event.preventDefault();
-                    if (!isSharedView) {
+                    const isTouchContextMenu =
+                      window.matchMedia("(pointer: coarse)").matches;
+                    if (!isSharedView && !isTouchContextMenu) {
                       openCourseActions(block, day);
                     }
                   }}
@@ -1078,17 +1134,96 @@ export default function ScheduleView({
               <button
                 className="sv-modal__btn sv-modal__btn--confirm"
                 onClick={() => {
-                  onRemoveCourseFromDay(
-                    pendingRemoval.courses[0].id,
+                  removeBlockFromDay(
+                    {
+                      key:
+                        pendingRemoval.block?.key ??
+                        pendingRemoval.courses.map((c) => c.id).join("-"),
+                      name: pendingRemoval.name,
+                      courses: pendingRemoval.courses,
+                      start:
+                        pendingRemoval.block?.start ??
+                        pendingRemoval.courses[0].timeRange.start,
+                      end:
+                        pendingRemoval.block?.end ??
+                        pendingRemoval.courses[pendingRemoval.courses.length - 1]
+                          .timeRange.end,
+                      color:
+                        pendingRemoval.block?.color ??
+                        pendingRemoval.courses[0].color.hex,
+                    },
                     pendingRemoval.day,
                   );
-                  pendingRemoval.courses.slice(1).forEach((course) => {
-                    onRemoveCourseFromDay(course.id, pendingRemoval.day);
-                  });
                   setPendingRemoval(null);
                 }}
               >
                 {t("scheduleView.delete")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingMobileAction && (
+        <div
+          className="sv-modal-overlay"
+          onClick={() => setPendingMobileAction(null)}
+        >
+          <div className="sv-modal" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="sv-modal__swatch"
+              style={{ backgroundColor: pendingMobileAction.block.color }}
+            />
+            <h3 className="sv-modal__title">
+              {pendingMobileAction.block.name}
+            </h3>
+            <p className="sv-modal__message">
+              <Trans
+                i18nKey={
+                  pendingMobileAction.mode === "edit"
+                    ? "scheduleView.mobileEditMessage"
+                    : "scheduleView.mobileDeleteMessage"
+                }
+                values={{
+                  course: pendingMobileAction.block.name,
+                  day: t(`days.${pendingMobileAction.day}`),
+                }}
+                components={[<></>, <strong />, <></>, <strong />]}
+              />
+            </p>
+            <div className="sv-modal__actions">
+              <button
+                className="sv-modal__btn sv-modal__btn--cancel"
+                onClick={() => setPendingMobileAction(null)}
+              >
+                {t("scheduleView.cancel")}
+              </button>
+              <button
+                className={
+                  pendingMobileAction.mode === "edit"
+                    ? "sv-modal__btn sv-modal__btn--edit"
+                    : "sv-modal__btn sv-modal__btn--confirm"
+                }
+                onClick={() => {
+                  if (pendingMobileAction.mode === "edit") {
+                    onEditCourse(
+                      buildEditDraft(
+                        pendingMobileAction.block,
+                        pendingMobileAction.day,
+                      ),
+                    );
+                  } else {
+                    removeBlockFromDay(
+                      pendingMobileAction.block,
+                      pendingMobileAction.day,
+                    );
+                  }
+                  setPendingMobileAction(null);
+                }}
+              >
+                {pendingMobileAction.mode === "edit"
+                  ? t("scheduleView.mobileEditConfirm")
+                  : t("scheduleView.mobileDeleteConfirm")}
               </button>
             </div>
           </div>

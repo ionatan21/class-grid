@@ -279,6 +279,11 @@ function App() {
     setEditingDraft(draft)
     setSidebarCollapsed(false)
     setSidebarOpen(true)
+    if (window.innerWidth <= 768) {
+      setTimeout(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+      }, 50)
+    }
   }
 
   function handleUpdateCourse(courseIds: string[], course: Course) {
