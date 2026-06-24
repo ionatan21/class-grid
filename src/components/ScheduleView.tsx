@@ -32,6 +32,8 @@ const DAY_COL_OFFSET = 2;
 const MIN_TEXT_CONTRAST = 4.5;
 const DRAG_ARM_PRESS_MS = 500;
 const DRAG_ARM_MOVE_CANCEL_PX = 14;
+const DRAG_AUTOSCROLL_EDGE_PX = 56;
+const DRAG_AUTOSCROLL_MAX_STEP = 18;
 const EXPORT_PADDING = 24;
 const EXPORT_GRID_WIDTH = 1520;
 
@@ -321,6 +323,7 @@ export default function ScheduleView({
 }: Props) {
   const { t, i18n } = useTranslation();
   const gridRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [pendingClear, setPendingClear] = useState(false);
   const [mobileActionMode, setMobileActionMode] =
     useState<MobileActionMode | null>(null);
@@ -346,8 +349,20 @@ export default function ScheduleView({
   );
   const [drag, setDrag] = useState<DragState | null>(null);
   const [armingDrag, setArmingDrag] = useState<DragPressState | null>(null);
+  const dragStateRef = useRef<DragState | null>(null);
   const dragPressRef = useRef<DragPressState | null>(null);
   const dragArmTimerRef = useRef<number | null>(null);
+  const dragAutoScrollRef = useRef<{
+    frameId: number | null;
+    pointerX: number;
+    pointerY: number;
+    active: boolean;
+  }>({
+    frameId: null,
+    pointerX: 0,
+    pointerY: 0,
+    active: false,
+  });
 
   function buildEditDraft(block: DisplayCourseBlock, day: Day): CourseFormDraft {
     const source = block.courses[0];
@@ -423,6 +438,11 @@ export default function ScheduleView({
     });
   }
 
+  function setDragState(nextDrag: DragState | null) {
+    dragStateRef.current = nextDrag;
+    setDrag(nextDrag);
+  }
+
   function openMobileCourseAction(block: DisplayCourseBlock, day: Day) {
     if (!mobileActionMode || isSharedView) return;
     setPendingMobileAction({
@@ -448,6 +468,89 @@ export default function ScheduleView({
     setArmingDrag(null);
   }
 
+  function stopDragAutoScroll() {
+    dragAutoScrollRef.current.active = false;
+    if (dragAutoScrollRef.current.frameId !== null) {
+      window.cancelAnimationFrame(dragAutoScrollRef.current.frameId);
+      dragAutoScrollRef.current.frameId = null;
+    }
+  }
+
+  function runDragAutoScroll() {
+    const state = dragAutoScrollRef.current;
+    const scroller = scrollRef.current;
+    state.frameId = null;
+
+    if (!state.active || !scroller) return;
+
+    const maxScrollLeft = scroller.scrollWidth - scroller.clientWidth;
+    if (maxScrollLeft <= 0) {
+      state.active = false;
+      return;
+    }
+
+    const rect = scroller.getBoundingClientRect();
+    const distanceFromLeft = state.pointerX - rect.left;
+    const distanceFromRight = rect.right - state.pointerX;
+    let direction = 0;
+    let intensity = 0;
+
+    if (distanceFromLeft < DRAG_AUTOSCROLL_EDGE_PX) {
+      direction = -1;
+      intensity = (DRAG_AUTOSCROLL_EDGE_PX - distanceFromLeft) /
+        DRAG_AUTOSCROLL_EDGE_PX;
+    } else if (distanceFromRight < DRAG_AUTOSCROLL_EDGE_PX) {
+      direction = 1;
+      intensity = (DRAG_AUTOSCROLL_EDGE_PX - distanceFromRight) /
+        DRAG_AUTOSCROLL_EDGE_PX;
+    }
+
+    let didScroll = false;
+    if (direction !== 0) {
+      const nextScrollLeft = Math.min(
+        maxScrollLeft,
+        Math.max(
+          0,
+          scroller.scrollLeft +
+            direction * Math.ceil(DRAG_AUTOSCROLL_MAX_STEP * intensity),
+        ),
+      );
+      if (nextScrollLeft !== scroller.scrollLeft) {
+        scroller.scrollLeft = nextScrollLeft;
+        didScroll = true;
+      }
+    }
+
+    const activeDrag = dragStateRef.current;
+    if (didScroll && activeDrag) {
+      const draggedIds = new Set(
+        activeDrag.block.courses.map((course) => course.id),
+      );
+      const candidate = candidateFromPointer(
+        state.pointerX,
+        state.pointerY,
+        activeDrag.rowSpan,
+        draggedIds,
+        activeDrag.fromDay,
+      );
+      if (candidate) {
+        setDragState({ ...activeDrag, candidate });
+      }
+    }
+
+    state.frameId = window.requestAnimationFrame(runDragAutoScroll);
+  }
+
+  function updateDragAutoScroll(clientX: number, clientY: number) {
+    const state = dragAutoScrollRef.current;
+    state.pointerX = clientX;
+    state.pointerY = clientY;
+    state.active = true;
+    if (state.frameId === null) {
+      state.frameId = window.requestAnimationFrame(runDragAutoScroll);
+    }
+  }
+
   function startDragFromPoint(
     target: HTMLDivElement,
     pointerId: number,
@@ -471,7 +574,8 @@ export default function ScheduleView({
       day,
     );
     if (!candidate) return;
-    setDrag({
+    updateDragAutoScroll(clientX, clientY);
+    setDragState({
       block,
       fromDay: day,
       pointerId,
@@ -546,7 +650,8 @@ export default function ScheduleView({
       drag.fromDay,
     );
     if (!candidate) return;
-    setDrag({ ...drag, candidate });
+    updateDragAutoScroll(event.clientX, event.clientY);
+    setDragState({ ...drag, candidate });
   }
 
   function finishDrag(event: React.PointerEvent<HTMLDivElement>) {
@@ -576,17 +681,19 @@ export default function ScheduleView({
         color: drag.block.color,
       });
     }
-    setDrag(null);
+    stopDragAutoScroll();
+    setDragState(null);
   }
 
   function cancelPointerInteraction(event: React.PointerEvent<HTMLDivElement>) {
     clearDragPress();
+    stopDragAutoScroll();
     if (
       event.currentTarget.hasPointerCapture(event.pointerId)
     ) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    setDrag(null);
+    setDragState(null);
   }
 
   /**
@@ -890,7 +997,7 @@ export default function ScheduleView({
         </div>
       </div>
 
-      <div className="sv-scroll">
+      <div className="sv-scroll" ref={scrollRef}>
         <div
           className="sv-grid"
           ref={gridRef}
