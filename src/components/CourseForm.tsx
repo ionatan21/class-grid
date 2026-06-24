@@ -281,6 +281,15 @@ export default function CourseForm({
         )}
       </div>
 
+      <div className="cf-help">
+        <p className="cf-help__text cf-help__text--desktop">
+          {t('courseForm.desktopHelp')}
+        </p>
+        <p className="cf-help__text cf-help__text--mobile">
+          {t('courseForm.mobileHelp')}
+        </p>
+      </div>
+
       {/* Footer */}
       <p className="cf-footer">
         {t('courseForm.footer')}{' '}

@@ -19,6 +19,8 @@
     "conflict": "Conflict with \"{{name}}\" on {{day}}",
     "footer": "Created by",
     "footerAuthor": "Jonatan Barrios",
+    "desktopHelp": "On desktop: hold left click on a course to move it. Right click to edit or remove it.",
+    "mobileHelp": "On mobile: press and hold a course to move it. Double tap to edit or remove it.",
     "readOnlyNotice": "Read-only schedule. Make it yours to edit it."
   },
   "scheduleView": {

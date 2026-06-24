@@ -19,6 +19,8 @@
     "conflict": "Conflicto con \"{{name}}\" el día {{day}}",
     "footer": "Creado por",
     "footerAuthor": "Jonatan Barrios",
+    "desktopHelp": "En escritorio: mantén presionado clic izquierdo sobre un curso para moverlo. Usa clic derecho para editarlo o eliminarlo.",
+    "mobileHelp": "En móvil: mantén presionado un curso para moverlo. Haz doble toque para editarlo o eliminarlo.",
     "readOnlyNotice": "Horario en modo lectura. Hazlo tuyo para editarlo."
   },
   "scheduleView": {

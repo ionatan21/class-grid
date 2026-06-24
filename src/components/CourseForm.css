@@ -235,6 +235,37 @@
   transform: translateY(-1px);
 }
 
+/* ── Usage hint ─────────────────────────────────────── */
+.cf-help {
+  margin-top: 0.85rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #dbeafe;
+  border-radius: 0.5rem;
+  background: #eff6ff;
+}
+
+.cf-help__text {
+  margin: 0;
+  color: #1e3a8a;
+  font-size: 0.76rem;
+  line-height: 1.45;
+  font-weight: 500;
+}
+
+.cf-help__text--mobile {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .cf-help__text--desktop {
+    display: none;
+  }
+
+  .cf-help__text--mobile {
+    display: block;
+  }
+}
+
 /* ── Animation ───────────────────────────────────────── */
 @keyframes cf-fadein {
   from { opacity: 0; transform: translateY(-4px); }
@@ -292,4 +323,13 @@
   background: #422006;
   color: #fde68a;
   border-color: #78350f;
+}
+
+.dark .cf-help {
+  background: #0f172a;
+  border-color: #334155;
+}
+
+.dark .cf-help__text {
+  color: #bfdbfe;
 }
