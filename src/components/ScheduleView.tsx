@@ -32,6 +32,8 @@ const DAY_COL_OFFSET = 2;
 const MIN_TEXT_CONTRAST = 4.5;
 const DRAG_ARM_PRESS_MS = 500;
 const DRAG_ARM_MOVE_CANCEL_PX = 14;
+const EXPORT_PADDING = 24;
+const EXPORT_GRID_WIDTH = 1520;
 
 interface RgbColor {
   r: number;
@@ -602,12 +604,9 @@ export default function ScheduleView({
   function buildCaptureClone(): { wrapper: HTMLElement; cleanup: () => void } {
     const grid = gridRef.current!;
     const cs = window.getComputedStyle(grid);
-    const PADDING = 24;
-
-    // Use the full viewport width so the export is always as wide as possible,
-    // regardless of whether the sidebar is open or collapsed.
-    const exportWidth = document.documentElement.clientWidth;
-    const gridWidth = exportWidth - 2 * PADDING;
+    const minGridWidth = 64 + DAYS.length * 80;
+    const gridWidth = Math.max(minGridWidth, EXPORT_GRID_WIDTH);
+    const exportWidth = gridWidth + 2 * EXPORT_PADDING;
 
     // Padded wrapper — this is what html2canvas will capture
     const wrapper = document.createElement("div");
@@ -615,16 +614,18 @@ export default function ScheduleView({
       "position: fixed",
       "top: 0",
       "left: -9999px",
-      `padding: ${PADDING}px`,
+      `padding: ${EXPORT_PADDING}px`,
       `background: ${darkMode ? "#0f172a" : "#f8fafc"}`,
       "box-sizing: border-box",
       `width: ${exportWidth}px`,
       "height: auto",
+      "overflow: visible",
     ].join("; ");
 
     // Clone the grid
     const clone = grid.cloneNode(true) as HTMLElement;
     const fullHeight = grid.scrollHeight;
+    clone.classList.add("sv-grid--export");
 
     clone.style.cssText = "";          // wipe inline styles from original
     clone.style.display = "grid";
@@ -633,6 +634,7 @@ export default function ScheduleView({
     clone.style.gridTemplateColumns = "64px repeat(7, minmax(80px, 1fr))";
     clone.style.gridTemplateRows = cs.gridTemplateRows;
     clone.style.width = `${gridWidth}px`;
+    clone.style.minWidth = `${gridWidth}px`;
     clone.style.height = `${fullHeight}px`;  // explicit — prevents h2c from clipping
     clone.style.position = "relative";
     clone.style.overflow = "visible";

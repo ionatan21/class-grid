@@ -503,6 +503,16 @@
   pointer-events: none;
 }
 
+.sv-grid--export .sv-course-name {
+  font-size: 0.95rem;
+  line-height: 1.25;
+  padding: 0 10px;
+}
+
+.sv-grid--export .sv-course-block {
+  text-align: center;
+}
+
 /* ── Hover tooltip (portal — rendered in document.body) ─────── */
 .sv-tooltip-portal {
   position: fixed;
