@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { URL } from "url";
 import { db } from "../lib/firebase.js";
 import { setCorsHeaders } from "../lib/cors.js";
+import { rateLimit } from "../lib/rateLimit.js";
 
 function json(res: ServerResponse, statusCode: number, body: unknown): void {
   res.setHeader("Content-Type", "application/json");
@@ -26,10 +27,20 @@ export default async function handler(
     return;
   }
 
+  const limited = await rateLimit(
+    req,
+    res,
+    300,
+    60 * 60 * 1000,
+    1,
+    "get-schedule",
+  );
+  if (limited) return;
+
   const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
   const id = url.searchParams.get("id");
 
-  if (!id || !/^[0-9a-f]{8}$/i.test(id)) {
+  if (!id || !/^(?:[0-9a-f]{8}|[0-9a-f]{32})$/i.test(id)) {
     json(res, 400, { error: "Valid id query parameter is required" });
     return;
   }

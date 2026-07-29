@@ -3,25 +3,51 @@ import crypto from "crypto";
 import { db } from "../lib/firebase.js";
 import { setCorsHeaders, isValidReferer } from "../lib/cors.js";
 import { rateLimit } from "../lib/rateLimit.js";
+import { validateSchedulePayload } from "../lib/scheduleValidation.js";
 
-/** Generates a random 8-character hex ID (4 bytes → 8 hex chars). */
+const MAX_BODY_BYTES = 50 * 1024;
+
+class RequestBodyTooLargeError extends Error {}
+
 function generateId(): string {
-  return crypto.randomBytes(4).toString("hex");
+  return crypto.randomBytes(16).toString("hex");
 }
 
-/** Collects the full request body and parses it as JSON. */
 function parseBody(req: IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
     let data = "";
-    req.on("data", (chunk: Buffer) => (data += chunk.toString()));
+    let size = 0;
+    let done = false;
+
+    req.on("data", (chunk: Buffer) => {
+      if (done) return;
+
+      size += chunk.length;
+      if (size > MAX_BODY_BYTES) {
+        done = true;
+        reject(new RequestBodyTooLargeError("Request body too large"));
+        return;
+      }
+
+      data += chunk.toString();
+    });
+
     req.on("end", () => {
+      if (done) return;
+      done = true;
+
       try {
         resolve(JSON.parse(data));
       } catch {
         reject(new Error("Invalid JSON body"));
       }
     });
-    req.on("error", reject);
+
+    req.on("error", (err) => {
+      if (done) return;
+      done = true;
+      reject(err);
+    });
   });
 }
 
@@ -48,7 +74,14 @@ export default async function handler(
     return;
   }
 
-  const limited = await rateLimit(req, res, 10, 24 * 60 * 60 * 1000, 1);
+  const limited = await rateLimit(
+    req,
+    res,
+    10,
+    24 * 60 * 60 * 1000,
+    1,
+    "create-schedule",
+  );
   if (limited) return;
 
   if (req.method !== "POST") {
@@ -59,26 +92,26 @@ export default async function handler(
   let body: unknown;
   try {
     body = await parseBody(req);
-  } catch {
+  } catch (err) {
+    if (err instanceof RequestBodyTooLargeError) {
+      json(res, 413, { error: "Request body too large" });
+      return;
+    }
+
     json(res, 400, { error: "Invalid request body" });
     return;
   }
 
-  if (
-    !body ||
-    typeof body !== "object" ||
-    !Array.isArray((body as Record<string, unknown>).schedule)
-  ) {
-    json(res, 400, { error: '"schedule" must be an array' });
+  const payload = validateSchedulePayload(body);
+  if (!payload) {
+    json(res, 400, { error: "Invalid schedule payload" });
     return;
   }
-
-  const schedule = (body as Record<string, unknown>).schedule;
 
   try {
     const id = generateId();
     await db.collection("schedules").doc(id).set({
-      schedule,
+      schedule: payload.schedule,
       createdAt: Date.now(),
     });
 
