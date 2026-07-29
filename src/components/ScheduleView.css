@@ -66,7 +66,22 @@
   gap: 0.6rem;
 }
 
+.sv-modal__actions--course {
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sv-modal__primary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
 .sv-modal__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
   padding: 0.48rem 0.9rem;
   border-radius: 0.45rem;
   font-size: 0.85rem;
@@ -74,6 +89,25 @@
   cursor: pointer;
   border: 1px solid transparent;
   transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
+}
+
+.sv-modal__btn-icon {
+  width: 0.85rem;
+  height: 0.85rem;
+  flex: 0 0 auto;
+  background: currentColor;
+  mask: center / contain no-repeat;
+  -webkit-mask: center / contain no-repeat;
+}
+
+.sv-modal__btn-icon--edit {
+  mask-image: url("/pen-to-square.svg");
+  -webkit-mask-image: url("/pen-to-square.svg");
+}
+
+.sv-modal__btn-icon--delete {
+  mask-image: url("/trash-solid.svg");
+  -webkit-mask-image: url("/trash-solid.svg");
 }
 
 .sv-modal__btn:active {

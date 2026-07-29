@@ -29,24 +29,18 @@ const HEADER_ROW = 1;
 const SLOT_ROW_OFFSET = 2;
 const TIME_COL = 1;
 const DAY_COL_OFFSET = 2;
-const MIN_TEXT_CONTRAST = 4.5;
 const DRAG_ARM_PRESS_MS = 500;
 const DRAG_ARM_MOVE_CANCEL_PX = 14;
 const DRAG_AUTOSCROLL_EDGE_PX = 56;
 const DRAG_AUTOSCROLL_MAX_STEP = 18;
 const EXPORT_PADDING = 24;
 const EXPORT_GRID_WIDTH = 1520;
+const LIGHT_BACKGROUND_LUMINANCE = 0.55;
 
 interface RgbColor {
   r: number;
   g: number;
   b: number;
-}
-
-interface HslColor {
-  h: number;
-  s: number;
-  l: number;
 }
 
 function hexToRgb(hex: string): RgbColor {
@@ -58,98 +52,25 @@ function hexToRgb(hex: string): RgbColor {
   };
 }
 
-function rgbToHsl({ r, g, b }: RgbColor): HslColor {
-  const [rn, gn, bn] = [r, g, b].map((value) => value / 255);
-  const max = Math.max(rn, gn, bn);
-  const min = Math.min(rn, gn, bn);
-  const delta = max - min;
-  const l = (max + min) / 2;
-
-  if (delta === 0) return { h: 0, s: 0, l };
-
-  const s = delta / (1 - Math.abs(2 * l - 1));
-  let h = 0;
-  if (max === rn) h = 60 * (((gn - bn) / delta) % 6);
-  if (max === gn) h = 60 * ((bn - rn) / delta + 2);
-  if (max === bn) h = 60 * ((rn - gn) / delta + 4);
-
-  return { h: (h + 360) % 360, s, l };
-}
-
-function hslToRgb({ h, s, l }: HslColor): RgbColor {
-  const chroma = (1 - Math.abs(2 * l - 1)) * s;
-  const x = chroma * (1 - Math.abs(((h / 60) % 2) - 1));
-  const m = l - chroma / 2;
-  const [rp, gp, bp] =
-    h < 60 ? [chroma, x, 0] :
-    h < 120 ? [x, chroma, 0] :
-    h < 180 ? [0, chroma, x] :
-    h < 240 ? [0, x, chroma] :
-    h < 300 ? [x, 0, chroma] :
-    [chroma, 0, x];
-
-  return {
-    r: Math.round((rp + m) * 255),
-    g: Math.round((gp + m) * 255),
-    b: Math.round((bp + m) * 255),
-  };
-}
-
-function rgbToHex({ r, g, b }: RgbColor): string {
-  return `#${[r, g, b]
-    .map((value) => value.toString(16).padStart(2, "0"))
-    .join("")}`;
+function linearizeColorChannel(value: number): number {
+  const channel = value / 255;
+  return channel <= 0.03928
+    ? channel / 12.92
+    : ((channel + 0.055) / 1.055) ** 2.4;
 }
 
 function relativeLuminance({ r, g, b }: RgbColor): number {
-  const [rs, gs, bs] = [r, g, b].map((value) => {
-    const channel = value / 255;
-    return channel <= 0.03928
-      ? channel / 12.92
-      : ((channel + 0.055) / 1.055) ** 2.4;
-  });
+  const rs = linearizeColorChannel(r);
+  const gs = linearizeColorChannel(g);
+  const bs = linearizeColorChannel(b);
 
   return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
 }
 
-function contrastRatio(first: RgbColor, second: RgbColor): number {
-  const l1 = relativeLuminance(first);
-  const l2 = relativeLuminance(second);
-  const lighter = Math.max(l1, l2);
-  const darker = Math.min(l1, l2);
-  return (lighter + 0.05) / (darker + 0.05);
-}
+function readableTextColor(hex: string): string {
+  const luminance = relativeLuminance(hexToRgb(hex));
 
-function contrastColor(hex: string): string {
-  const background = hexToRgb(hex);
-  const backgroundHsl = rgbToHsl(background);
-  const black: RgbColor = { r: 0, g: 0, b: 0 };
-  const white: RgbColor = { r: 255, g: 255, b: 255 };
-  const shouldLighten =
-    contrastRatio(background, white) >= contrastRatio(background, black);
-  const hue = (backgroundHsl.h + 180) % 360;
-  const saturation = backgroundHsl.s;
-  const startingLightness = 1 - backgroundHsl.l;
-  const step = shouldLighten ? 0.01 : -0.01;
-
-  for (
-    let lightness = startingLightness;
-    shouldLighten ? lightness <= 1 : lightness >= 0;
-    lightness += step
-  ) {
-    const candidate = hslToRgb({
-      h: hue,
-      s: saturation,
-      l: Math.min(1, Math.max(0, lightness)),
-    });
-    if (contrastRatio(background, candidate) >= MIN_TEXT_CONTRAST) {
-      return rgbToHex(candidate);
-    }
-  }
-
-  return contrastRatio(background, white) >= contrastRatio(background, black)
-    ? "#ffffff"
-    : "#000000";
+  return luminance >= LIGHT_BACKGROUND_LUMINANCE ? "#000000" : "#ffffff";
 }
 interface PendingRemoval {
   courses: Course[];
@@ -1048,7 +969,7 @@ export default function ScheduleView({
               const endHour = parseInt(block.end.split(":")[0], 10);
               const rowStart = startHour - FIRST_HOUR + SLOT_ROW_OFFSET;
               const rowSpan = endHour - startHour + 1;
-              const fg = contrastColor(block.color);
+              const fg = readableTextColor(block.color);
               const tipBelow = rowStart - SLOT_ROW_OFFSET < SLOTS.length / 2;
               const isDragging =
                 drag?.fromDay === day &&
@@ -1139,7 +1060,7 @@ export default function ScheduleView({
                 gridColumn: drag.candidate.dayIndex + DAY_COL_OFFSET,
                 gridRow: `${drag.candidate.rowStart} / span ${drag.candidate.rowSpan}`,
                 backgroundColor: drag.block.color,
-                color: contrastColor(drag.block.color),
+                color: readableTextColor(drag.block.color),
               }}
             >
               <span className="sv-course-name">{drag.block.name}</span>
@@ -1204,12 +1125,42 @@ export default function ScheduleView({
                 components={[<></>, <strong />, <></>, <strong />]}
               />
             </p>
-            <div className="sv-modal__actions">
-              <button
-                className="sv-modal__btn sv-modal__btn--edit"
-                onClick={() => {
-                  onEditCourse(
-                    buildEditDraft(
+            <div className="sv-modal__actions sv-modal__actions--course">
+              <div className="sv-modal__primary-actions">
+                <button
+                  className="sv-modal__btn sv-modal__btn--edit"
+                  onClick={() => {
+                    onEditCourse(
+                      buildEditDraft(
+                        {
+                          key:
+                            pendingRemoval.block?.key ??
+                            pendingRemoval.courses.map((c) => c.id).join("-"),
+                          name: pendingRemoval.name,
+                          courses: pendingRemoval.courses,
+                          start:
+                            pendingRemoval.block?.start ??
+                            pendingRemoval.courses[0].timeRange.start,
+                          end:
+                            pendingRemoval.block?.end ??
+                            pendingRemoval.courses[pendingRemoval.courses.length - 1].timeRange.end,
+                          color:
+                            pendingRemoval.block?.color ??
+                            pendingRemoval.courses[0].color.hex,
+                        },
+                        pendingRemoval.day,
+                      ),
+                    );
+                    setPendingRemoval(null);
+                  }}
+                >
+                  <span className="sv-modal__btn-icon sv-modal__btn-icon--edit" />
+                  {t("scheduleView.edit")}
+                </button>
+                <button
+                  className="sv-modal__btn sv-modal__btn--confirm"
+                  onClick={() => {
+                    removeBlockFromDay(
                       {
                         key:
                           pendingRemoval.block?.key ??
@@ -1221,52 +1172,26 @@ export default function ScheduleView({
                           pendingRemoval.courses[0].timeRange.start,
                         end:
                           pendingRemoval.block?.end ??
-                          pendingRemoval.courses[pendingRemoval.courses.length - 1].timeRange.end,
+                          pendingRemoval.courses[pendingRemoval.courses.length - 1]
+                            .timeRange.end,
                         color:
                           pendingRemoval.block?.color ??
                           pendingRemoval.courses[0].color.hex,
                       },
                       pendingRemoval.day,
-                    ),
-                  );
-                  setPendingRemoval(null);
-                }}
-              >
-                {t("scheduleView.edit")}
-              </button>
+                    );
+                    setPendingRemoval(null);
+                  }}
+                >
+                  <span className="sv-modal__btn-icon sv-modal__btn-icon--delete" />
+                  {t("scheduleView.delete")}
+                </button>
+              </div>
               <button
                 className="sv-modal__btn sv-modal__btn--cancel"
                 onClick={() => setPendingRemoval(null)}
               >
                 {t("scheduleView.cancel")}
-              </button>
-              <button
-                className="sv-modal__btn sv-modal__btn--confirm"
-                onClick={() => {
-                  removeBlockFromDay(
-                    {
-                      key:
-                        pendingRemoval.block?.key ??
-                        pendingRemoval.courses.map((c) => c.id).join("-"),
-                      name: pendingRemoval.name,
-                      courses: pendingRemoval.courses,
-                      start:
-                        pendingRemoval.block?.start ??
-                        pendingRemoval.courses[0].timeRange.start,
-                      end:
-                        pendingRemoval.block?.end ??
-                        pendingRemoval.courses[pendingRemoval.courses.length - 1]
-                          .timeRange.end,
-                      color:
-                        pendingRemoval.block?.color ??
-                        pendingRemoval.courses[0].color.hex,
-                    },
-                    pendingRemoval.day,
-                  );
-                  setPendingRemoval(null);
-                }}
-              >
-                {t("scheduleView.delete")}
               </button>
             </div>
           </div>
