@@ -294,7 +294,7 @@ export default function CourseForm({
       <p className="cf-footer">
         {t('courseForm.footer')}{' '}
         <a
-          href="https://portfolio-jonatan-barrios.vercel.app/"
+          href="https://jonatanbarrios.dev/"
           target="_blank"
           rel="noopener noreferrer"
           className="cf-footer__link"
